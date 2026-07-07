@@ -106,6 +106,8 @@ class _ZikirScreenState extends State<ZikirScreen>
   /// ebced ya da özel sayıyla eşleşiyorsa o mod ve kalan sayı geri getirilir;
   /// eşleşmiyorsa sayaç mevcut hedefe göre sıfırdan başlar.
   Future<void> _refreshState() async {
+    // Widget arka planda veriyi değiştirmiş olabilir; diskten taze oku.
+    await StorageService.reload();
     final index = _currentIndex;
     final vibration = await StorageService.getVibrationEnabled();
     final favorited = await StorageService.isFavorite(index);

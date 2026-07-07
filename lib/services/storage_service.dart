@@ -12,6 +12,14 @@ class StorageService {
   static Future<SharedPreferences> get _prefs async =>
       await SharedPreferences.getInstance();
 
+  /// Bellekteki önbelleği diskten tazeler. Widget'ın arka plan isolate'ı
+  /// veriyi değiştirmiş olabileceğinden, uygulama öne geldiğinde bu çağrılır;
+  /// böylece uygulama widget'tan çekilen zikirleri görür.
+  static Future<void> reload() async {
+    final prefs = await _prefs;
+    await prefs.reload();
+  }
+
   static Future<List<ZikirHistory>> getHistory() async {
     final prefs = await _prefs;
     final data = prefs.getString(_historyKey);
