@@ -50,3 +50,8 @@ app.*.map.json
 **/*.keystore
 *.jks
 *.keystore
+
+# Node (kazara oluşan, Flutter projesine ait değil)
+node_modules/
+package.json
+package-lock.json

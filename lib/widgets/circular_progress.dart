@@ -5,6 +5,7 @@ class CircularProgressWidget extends StatelessWidget {
   final double progress;
   final double size;
   final double strokeWidth;
+  final Color trackColor;
   final Widget child;
 
   const CircularProgressWidget({
@@ -12,6 +13,7 @@ class CircularProgressWidget extends StatelessWidget {
     required this.progress,
     this.size = 320,
     this.strokeWidth = 22,
+    this.trackColor = const Color(0xFF2A2A2A),
     this.child = const SizedBox.shrink(),
   });
 
@@ -24,6 +26,7 @@ class CircularProgressWidget extends StatelessWidget {
         painter: _CircularProgressPainter(
           progress: progress.clamp(0.0, 1.0),
           strokeWidth: strokeWidth,
+          trackColor: trackColor,
         ),
         child: Center(child: child),
       ),
@@ -34,10 +37,12 @@ class CircularProgressWidget extends StatelessWidget {
 class _CircularProgressPainter extends CustomPainter {
   final double progress;
   final double strokeWidth;
+  final Color trackColor;
 
   _CircularProgressPainter({
     required this.progress,
     required this.strokeWidth,
+    required this.trackColor,
   });
 
   @override
@@ -45,9 +50,9 @@ class _CircularProgressPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = (size.width - strokeWidth) / 2;
 
-    // Background circle - subtle dark ring
+    // Background circle - subtle track ring
     final bgPaint = Paint()
-      ..color = const Color(0xFF2A2A2A)
+      ..color = trackColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth;
 
@@ -114,6 +119,7 @@ class _CircularProgressPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CircularProgressPainter oldDelegate) {
-    return oldDelegate.progress != progress;
+    return oldDelegate.progress != progress ||
+        oldDelegate.trackColor != trackColor;
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
+import '../theme/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -9,6 +10,11 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  static const Color _accent = Color(0xFFFF6B35);
+  static const Color _accentLight = Color(0xFFFF8E53);
+
+  AppPalette _p = AppPalette.dark;
+
   bool _vibrationEnabled = true;
   int _customCount = 33;
   final TextEditingController _countController = TextEditingController();
@@ -54,18 +60,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _p = ThemeScope.of(context);
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF0D0D0D),
-              Color(0xFF1A1A2E),
-              Color(0xFF16213E),
-              Color(0xFF0D0D0D),
-            ],
+            colors: _p.bg,
           ),
         ),
         child: SafeArea(
@@ -77,6 +79,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
+                      _buildThemeToggle(),
+                      const SizedBox(height: 16),
                       _buildVibrationToggle(),
                       const SizedBox(height: 16),
                       _buildCustomCountSection(),
@@ -101,21 +105,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: _p.onBg(0.05),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(
                 Icons.arrow_back_ios_rounded,
-                color: Color(0xFFFF6B35),
+                color: _accent,
                 size: 20,
               ),
             ),
           ),
           const SizedBox(width: 16),
-          const Text(
+          Text(
             'Ayarlar',
             style: TextStyle(
-              color: Colors.white,
+              color: _p.textPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
@@ -125,53 +129,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildVibrationToggle() {
+  Widget _buildCard({required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: _p.onBg(0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: _p.onBg(0.08),
           width: 1,
         ),
       ),
+      child: child,
+    );
+  }
+
+  Widget _buildRowIcon(IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _accent.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: _accent, size: 24),
+    );
+  }
+
+  Widget _buildLabelColumn(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: _p.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: TextStyle(color: _p.onBg(0.55), fontSize: 13),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildThemeToggle() {
+    final isLight = !_p.isDark;
+    return _buildCard(
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B35).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.vibration_rounded,
-                  color: Color(0xFFFF6B35),
-                  size: 24,
-                ),
-              ),
+              _buildRowIcon(
+                  isLight ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
               const SizedBox(width: 16),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Titreşim',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Dokunuşlarda titreşim',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
-                  ),
-                ],
+              _buildLabelColumn(
+                'Aydınlık Mod',
+                isLight ? 'Renkli açık tema' : 'Koyu tema etkin',
               ),
+            ],
+          ),
+          Switch(
+            value: isLight,
+            onChanged: (value) => appTheme.setDark(!value),
+            activeThumbColor: _accent,
+            activeTrackColor: _accent.withValues(alpha: 0.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVibrationToggle() {
+    return _buildCard(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              _buildRowIcon(Icons.vibration_rounded),
+              const SizedBox(width: 16),
+              _buildLabelColumn('Titreşim', 'Dokunuşlarda titreşim'),
             ],
           ),
           Switch(
@@ -182,8 +224,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
               StorageService.setVibrationEnabled(value);
             },
-            activeThumbColor: const Color(0xFFFF6B35),
-            activeTrackColor: const Color(0xFFFF6B35).withValues(alpha: 0.3),
+            activeThumbColor: _accent,
+            activeTrackColor: _accent.withValues(alpha: 0.3),
           ),
         ],
       ),
@@ -191,52 +233,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildCustomCountSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
-          width: 1,
-        ),
-      ),
+    return _buildCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B35).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.tag_rounded,
-                  color: Color(0xFFFF6B35),
-                  size: 24,
-                ),
-              ),
+              _buildRowIcon(Icons.tag_rounded),
               const SizedBox(width: 16),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Özel Zikir Sayısı',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Hedef zikir sayısını belirleyin',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
-                  ),
-                ],
-              ),
+              _buildLabelColumn(
+                  'Özel Zikir Sayısı', 'Hedef zikir sayısını belirleyin'),
             ],
           ),
           const SizedBox(height: 20),
@@ -246,34 +252,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: TextField(
                   controller: _countController,
                   keyboardType: TextInputType.number,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: _p.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
                   decoration: InputDecoration(
                     hintText: 'Sayı girin',
-                    hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.2),
-                    ),
+                    hintStyle: TextStyle(color: _p.onBg(0.25)),
                     filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.05),
+                    fillColor: _p.onBg(0.05),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.1),
-                      ),
+                      borderSide: BorderSide(color: _p.onBg(0.1)),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.1),
-                      ),
+                      borderSide: BorderSide(color: _p.onBg(0.1)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(
-                        color: Color(0xFFFF6B35),
+                        color: _accent,
                         width: 2,
                       ),
                     ),
@@ -288,15 +288,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       horizontal: 24, vertical: 16),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFFFF6B35),
-                        Color(0xFFFF8E53),
-                      ],
+                      colors: [_accent, _accentLight],
                     ),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFF6B35).withValues(alpha: 0.3),
+                        color: _accent.withValues(alpha: 0.3),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -318,7 +315,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             'Hızlı Seçim',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
+              color: _p.onBg(0.5),
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -343,27 +340,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: BoxDecoration(
                     gradient: isSelected
                         ? const LinearGradient(
-                            colors: [
-                              Color(0xFFFF6B35),
-                              Color(0xFFFF8E53),
-                            ],
+                            colors: [_accent, _accentLight],
                           )
                         : null,
-                    color: isSelected ? null : Colors.white.withValues(alpha: 0.05),
+                    color: isSelected ? null : _p.onBg(0.05),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFFFF6B35)
-                          : Colors.white.withValues(alpha: 0.1),
+                      color: isSelected ? _accent : _p.onBg(0.1),
                       width: 1,
                     ),
                   ),
                   child: Text(
                     '$count',
                     style: TextStyle(
-                      color: isSelected
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.6),
+                      color: isSelected ? Colors.white : _p.onBg(0.6),
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),

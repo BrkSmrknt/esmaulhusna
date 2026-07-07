@@ -1,13 +1,17 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import '../data/esma_data.dart';
 import '../models/esma_model.dart';
 import '../services/storage_service.dart';
 import '../services/vibration_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/circular_progress.dart';
-import '../widgets/ripple_effect.dart';
+import '../widgets/tap_glow_effect.dart';
 import '../widgets/milestone_float.dart';
 import 'favorites_screen.dart';
 import 'history_screen.dart';
+import 'names_list_screen.dart';
 import 'settings_screen.dart';
 
 class ZikirScreen extends StatefulWidget {
@@ -21,17 +25,27 @@ class ZikirScreen extends StatefulWidget {
 
 class _ZikirScreenState extends State<ZikirScreen>
     with SingleTickerProviderStateMixin {
+  static const Color _accent = Color(0xFFFF6B35);
+  static const Color _accentLight = Color(0xFFFF8E53);
+
+  /// Mevcut palet; her [build] başında güncellenir ve yardımcı metotlarda
+  /// kullanılır.
+  AppPalette _p = AppPalette.dark;
+
   late int _currentIndex;
   late int _remaining;
   bool _isFavorited = false;
   bool _vibrationEnabled = true;
   int _customCount = 33;
   bool _useEbced = true;
+
+  /// İsim geçiş animasyonunun yönü: 1 = sonraki, -1 = önceki.
+  int _navDirection = 1;
+
   final List<_RippleData> _ripples = [];
   final List<_MilestoneData> _milestones = [];
   int _effectSeq = 0;
 
-  /// Kilometre taşı animasyonunun tetikleneceği ilerleme oranları (% olarak).
   static const List<double> _milestoneThresholds = [
     0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
   ];
@@ -57,8 +71,8 @@ class _ZikirScreenState extends State<ZikirScreen>
       curve: Curves.easeInOut,
     ));
 
-    _loadSettings();
-    _loadSavedCount();
+    VibrationService.init();
+    _refreshState();
   }
 
   @override
@@ -67,27 +81,47 @@ class _ZikirScreenState extends State<ZikirScreen>
     super.dispose();
   }
 
-  Future<void> _loadSettings() async {
-    _vibrationEnabled = await StorageService.getVibrationEnabled();
-    _isFavorited = await StorageService.isFavorite(_currentIndex);
-    _customCount = await StorageService.getCustomCount();
-    if (!_useEbced) {
-      _remaining = _totalCount;
-    }
-    setState(() {});
-  }
-
-  Future<void> _loadSavedCount() async {
+  /// Ayarları ve mevcut isim için kayıtlı ilerlemeyi yükler. Kayıtlı hedef
+  /// ebced ya da özel sayıyla eşleşiyorsa o mod ve kalan sayı geri getirilir;
+  /// eşleşmiyorsa sayaç mevcut hedefe göre sıfırdan başlar.
+  Future<void> _refreshState() async {
+    final index = _currentIndex;
+    final vibration = await StorageService.getVibrationEnabled();
+    final favorited = await StorageService.isFavorite(index);
+    final customCount = await StorageService.getCustomCount();
     final history = await StorageService.getHistory();
-    final existing = history.where((h) => h.esmaIndex == _currentIndex);
-    if (existing.isNotEmpty) {
-      final entry = existing.first;
-      if (!entry.isCompleted) {
-        setState(() {
-          _remaining = entry.targetCount - entry.completedCount;
-        });
+
+    if (!mounted || index != _currentIndex) return;
+
+    var useEbced = _useEbced;
+    int? savedRemaining;
+    final ebced = _currentEsma.ebced;
+
+    final matches = history.where((h) => h.esmaIndex == index);
+    if (matches.isNotEmpty) {
+      final entry = matches.first;
+      if (!entry.isCompleted && entry.completedCount > 0) {
+        if (entry.targetCount == ebced) {
+          useEbced = true;
+          savedRemaining = entry.targetCount - entry.completedCount;
+        } else if (entry.targetCount == customCount) {
+          useEbced = false;
+          savedRemaining = entry.targetCount - entry.completedCount;
+        }
       }
     }
+
+    setState(() {
+      _vibrationEnabled = vibration;
+      _isFavorited = favorited;
+      _customCount = customCount;
+      _useEbced = useEbced;
+      final total = useEbced ? ebced : customCount;
+      _remaining =
+          (savedRemaining != null && savedRemaining > 0 && savedRemaining <= total)
+              ? savedRemaining
+              : total;
+    });
   }
 
   EsmaModel get _currentEsma => EsmaData.esmalar[_currentIndex];
@@ -112,20 +146,12 @@ class _ZikirScreenState extends State<ZikirScreen>
       _remaining--;
       _ripples.add(_RippleData(id: _effectSeq++, position: position));
 
-      // Her %10 ilerlemede kalan sayıyı büyükçe yukarı süzdür.
       if (total > 0 &&
           _remaining > 0 &&
           _crossedMilestone(oldCompleted, _completed, total)) {
         _milestones.add(_MilestoneData(id: _effectSeq++, value: _remaining));
       }
     });
-
-    StorageService.updateZikirCount(
-      _currentIndex,
-      _currentEsma.latin,
-      _totalCount,
-      _completed,
-    );
 
     if (_remaining <= 0) {
       StorageService.incrementCompletion(
@@ -134,6 +160,13 @@ class _ZikirScreenState extends State<ZikirScreen>
         _totalCount,
       );
       _showCompletionDialog();
+    } else {
+      StorageService.updateZikirCount(
+        _currentIndex,
+        _currentEsma.latin,
+        _totalCount,
+        _completed,
+      );
     }
   }
 
@@ -147,77 +180,67 @@ class _ZikirScreenState extends State<ZikirScreen>
       builder: (context) => PopScope(
         canPop: false,
         child: AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFFFF6B35), width: 2),
-        ),
-        title: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.auto_awesome, color: Color(0xFFFF6B35), size: 28),
-            SizedBox(width: 8),
-            Text(
-              'MashaAllah!',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _currentEsma.latin,
-              style: const TextStyle(
-                color: Color(0xFFFF6B35),
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '$_totalCount defa tamamlandı!',
-              style: const TextStyle(color: Colors.white70, fontSize: 16),
-            ),
-          ],
-        ),
-        actions: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          backgroundColor: _p.dialogBg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: _accent, width: 2),
+          ),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  setState(() {
-                    _remaining = _totalCount;
-                    _ripples.clear();
-                    _milestones.clear();
-                  });
-                  StorageService.updateZikirCount(
-                    _currentIndex,
-                    _currentEsma.latin,
-                    _totalCount,
-                    0,
-                  );
-                },
-                child: const Text('Tekrarla',
-                    style: TextStyle(color: Colors.white54)),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _nextEsma();
-                },
-                child: const Text('Sonraki İsim',
-                    style: TextStyle(color: Color(0xFFFF6B35))),
+              const Icon(Icons.auto_awesome, color: _accent, size: 28),
+              const SizedBox(width: 8),
+              Text(
+                'MashaAllah!',
+                style: TextStyle(
+                  color: _p.textPrimary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
-        ],
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _currentEsma.latin,
+                style: const TextStyle(
+                  color: _accent,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$_totalCount defa tamamlandı!',
+                style: TextStyle(color: _p.onBg(0.7), fontSize: 16),
+              ),
+            ],
+          ),
+          actions: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _resetCurrentZikir();
+                  },
+                  child: Text('Tekrarla',
+                      style: TextStyle(color: _p.onBg(0.5))),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _changeEsma(1);
+                  },
+                  child: const Text('Sonraki İsim',
+                      style: TextStyle(color: _accent)),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -244,23 +267,39 @@ class _ZikirScreenState extends State<ZikirScreen>
     });
   }
 
-  void _previousEsma() {
-    setState(() {
-      _currentIndex = (_currentIndex - 1 + EsmaData.esmalar.length) %
-          EsmaData.esmalar.length;
-      _remaining = _totalCount;
-    });
-    _loadSavedCount();
-    _loadSettings();
+  void _changeEsma(int delta) {
+    final len = EsmaData.esmalar.length;
+    _jumpToEsma(
+      (_currentIndex + delta + len) % len,
+      direction: delta >= 0 ? 1 : -1,
+    );
   }
 
-  void _nextEsma() {
+  void _jumpToEsma(int index, {int? direction}) {
+    if (index == _currentIndex) return;
     setState(() {
-      _currentIndex = (_currentIndex + 1) % EsmaData.esmalar.length;
+      _navDirection = direction ?? (index > _currentIndex ? 1 : -1);
+      _currentIndex = index;
       _remaining = _totalCount;
+      _ripples.clear();
+      _milestones.clear();
     });
-    _loadSavedCount();
-    _loadSettings();
+    _refreshState();
+  }
+
+  /// Alt ekranlardan biri isim seçerek kapanırsa o isme atlar; kapanış sonrası
+  /// favori/geçmiş/ayar değişikliklerini de tazeler.
+  Future<void> _openScreen(Widget screen) async {
+    final result = await Navigator.push<int>(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
+    );
+    if (!mounted) return;
+    if (result != null) {
+      _jumpToEsma(result);
+    } else {
+      _refreshState();
+    }
   }
 
   void _toggleFavorite() async {
@@ -269,63 +308,119 @@ class _ZikirScreenState extends State<ZikirScreen>
     setState(() {});
   }
 
+  void _resetCurrentZikir() {
+    setState(() {
+      _remaining = _totalCount;
+      _ripples.clear();
+      _milestones.clear();
+    });
+    StorageService.updateZikirCount(
+      _currentIndex,
+      _currentEsma.latin,
+      _totalCount,
+      0,
+    );
+  }
+
+  void _switchTargetMode(bool ebced) {
+    if (ebced == _useEbced) return;
+    final oldCompleted = _completed;
+    setState(() {
+      _useEbced = ebced;
+      final newTotal = _totalCount;
+      final clamped = oldCompleted > newTotal ? newTotal : oldCompleted;
+      _remaining = newTotal - clamped;
+      _ripples.clear();
+      _milestones.clear();
+    });
+    StorageService.updateZikirCount(
+      _currentIndex,
+      _currentEsma.latin,
+      _totalCount,
+      _completed,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    _p = ThemeScope.of(context);
     final progress = _totalCount > 0 ? _completed / _totalCount : 0.0;
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF0D0D0D),
-              Color(0xFF1A1A2E),
-              Color(0xFF16213E),
-              Color(0xFF0D0D0D),
-            ],
+            colors: _p.bg,
           ),
         ),
         child: SafeArea(
-          child: Stack(
-            children: [
-              Column(
-                children: [
-                  _buildTopBar(),
-                  _buildIconBar(),
-                  Expanded(
-                    child: _buildMainContent(progress),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final h = constraints.maxHeight;
+              final w = constraints.maxWidth;
+              final isSmall = h < 700;
+
+              // Tablet ve geniş ekranlarda içerik ortada, okunur bir
+              // genişlikte kalır; telefonlarda tüm genişlik kullanılır.
+              final contentWidth = math.min(w, 520.0);
+              final buttonSize = math
+                  .min(contentWidth * 0.62, h * 0.34)
+                  .clamp(160.0, 330.0)
+                  .toDouble();
+              final innerSize = buttonSize * 0.77;
+              final arabicFont = (h * 0.054).clamp(30.0, 56.0).toDouble();
+              final latinFont = (h * 0.028).clamp(17.0, 27.0).toDouble();
+              final remainFont = innerSize * 0.30;
+
+              return Center(
+                child: SizedBox(
+                  width: contentWidth,
+                  child: Column(
+                    children: [
+                      _buildTopBar(isSmall),
+                      _buildIconBar(isSmall),
+                      const Spacer(flex: 2),
+                      _buildNameSection(arabicFont, latinFont, isSmall),
+                      const Spacer(flex: 2),
+                      _buildTargetRow(isSmall),
+                      SizedBox(height: h * 0.022),
+                      _buildZikirButton(
+                          progress, buttonSize, innerSize, remainFont, isSmall),
+                      const Spacer(flex: 3),
+                      _buildBottomChips(isSmall),
+                      SizedBox(height: isSmall ? 8 : 12),
+                    ],
                   ),
-                ],
-              ),
-              _buildSideNav(),
-            ],
+                ),
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTopBar() {
+  Widget _buildTopBar(bool isSmall) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: isSmall ? 4 : 8),
       child: Center(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(20),
+            color: _p.onBg(0.05),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: _p.onBg(0.08),
               width: 1,
             ),
           ),
           child: Text(
             '${_currentEsma.index} / ${EsmaData.esmalar.length}',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6),
-              fontSize: 13,
+              color: _p.onBg(0.6),
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               letterSpacing: 1,
             ),
@@ -335,127 +430,34 @@ class _ZikirScreenState extends State<ZikirScreen>
     );
   }
 
-  Widget _buildSideNav() {
-    final prevIndex =
-        (_currentIndex - 1 + EsmaData.esmalar.length) % EsmaData.esmalar.length;
-    final nextIndex = (_currentIndex + 1) % EsmaData.esmalar.length;
-
-    return Positioned.fill(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 40),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _buildNavArrow(
-              icon: Icons.chevron_left_rounded,
-              label: EsmaData.esmalar[prevIndex].latin,
-              onTap: _previousEsma,
-              alignLeft: true,
-            ),
-            _buildNavArrow(
-              icon: Icons.chevron_right_rounded,
-              label: EsmaData.esmalar[nextIndex].latin,
-              onTap: _nextEsma,
-              alignLeft: false,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavArrow({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    required bool alignLeft,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: alignLeft ? 8 : 0,
-          right: alignLeft ? 0 : 8,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.06),
-                border: Border.all(
-                  color: const Color(0xFFFF6B35).withValues(alpha: 0.35),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: Icon(icon, color: const Color(0xFFFF6B35), size: 30),
-            ),
-            const SizedBox(height: 6),
-            SizedBox(
-              width: 76,
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.45),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIconBar() {
+  Widget _buildIconBar(bool isSmall) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: isSmall ? 16 : 24, vertical: 2),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _buildIconButton(
             icon: Icons.settings_rounded,
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              );
-              _loadSettings();
-            },
+            onTap: () => _openScreen(const SettingsScreen()),
           ),
           _buildIconButton(
-            icon: _isFavorited ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            icon: Icons.list_rounded,
+            onTap: () => _openScreen(const NamesListScreen()),
+          ),
+          _buildIconButton(
+            icon: _isFavorited
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
             color: _isFavorited ? const Color(0xFFE74C3C) : null,
             onTap: _toggleFavorite,
           ),
           _buildIconButton(
             icon: Icons.history_rounded,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const HistoryScreen()),
-            ),
+            onTap: () => _openScreen(const HistoryScreen()),
           ),
           _buildIconButton(
             icon: Icons.bookmark_rounded,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const FavoritesScreen()),
-            ),
+            onTap: () => _openScreen(const FavoritesScreen()),
           ),
         ],
       ),
@@ -470,171 +472,432 @@ class _ZikirScreenState extends State<ZikirScreen>
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
+          color: _p.onBg(0.05),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: _p.onBg(0.08),
             width: 1,
           ),
         ),
         child: Icon(
           icon,
-          color: color ?? const Color(0xFFFF6B35),
-          size: 24,
+          color: color ?? _accent,
+          size: 20,
         ),
       ),
     );
   }
 
-  Widget _buildMainContent(double progress) {
-    return SingleChildScrollView(
-      child: Column(
+  Widget _buildNameSection(double arabicFont, double latinFont, bool isSmall) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isSmall ? 10 : 16),
+      child: Row(
         children: [
-          const SizedBox(height: 20),
-          // Arabic name
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              _currentEsma.arapca,
-              textDirection: TextDirection.rtl,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 50,
-                fontWeight: FontWeight.bold,
-                height: 1.35,
-                shadows: [
-                  Shadow(
-                    color: const Color(0xFFFF6B35).withValues(alpha: 0.35),
-                    blurRadius: 24,
-                  ),
+          _buildNavButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            semanticLabel: 'Önceki isim',
+            onTap: () => _changeEsma(-1),
+          ),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final slide = Tween<Offset>(
+                  begin: Offset(0.12 * _navDirection, 0),
+                  end: Offset.zero,
+                ).animate(animation);
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(position: slide, child: child),
+                );
+              },
+              layoutBuilder: (currentChild, previousChildren) => Stack(
+                alignment: Alignment.center,
+                children: [
+                  ...previousChildren,
+                  ?currentChild,
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Latin name
-          Text(
-            _currentEsma.latin,
-            style: const TextStyle(
-              color: Color(0xFFFF6B35),
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              fontStyle: FontStyle.italic,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 6),
-          // Turkish name
-          Text(
-            _currentEsma.turkce,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6),
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Meaning
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  width: 1,
-                ),
-              ),
-              child: Text(
-                _currentEsma.anlami,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  fontSize: 15,
-                  height: 1.5,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Fazilet (dokununca tam metin açılır)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: GestureDetector(
-              onTap: _showDetailSheet,
-              behavior: HitTestBehavior.opaque,
               child: Column(
+                key: ValueKey(_currentIndex),
                 children: [
                   Text(
-                    _currentEsma.fazilet,
+                    _currentEsma.arapca,
+                    textDirection: TextDirection.rtl,
                     textAlign: TextAlign.center,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.45),
-                      fontSize: 13,
-                      height: 1.4,
+                      color: _p.textPrimary,
+                      fontSize: arabicFont,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                      shadows: [
+                        Shadow(
+                          color: _accent.withValues(alpha: 0.35),
+                          blurRadius: 24,
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Devamını oku',
-                        style: TextStyle(
-                          color: const Color(0xFFFF6B35).withValues(alpha: 0.8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                  SizedBox(height: isSmall ? 2 : 4),
+                  Text(
+                    _currentEsma.latin,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _accent,
+                      fontSize: latinFont,
+                      fontWeight: FontWeight.bold,
+                      fontStyle: FontStyle.italic,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  SizedBox(height: isSmall ? 1 : 2),
+                  Text(
+                    _currentEsma.turkce,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _p.onBg(0.6),
+                      fontSize: isSmall ? 12 : 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: isSmall ? 4 : 6),
+                  GestureDetector(
+                    onTap: _showDetailSheet,
+                    behavior: HitTestBehavior.opaque,
+                    child: Column(
+                      children: [
+                        Text(
+                          _currentEsma.anlami,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _p.onBg(0.65),
+                            fontSize: isSmall ? 11 : 13,
+                            height: 1.4,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(Icons.expand_more_rounded,
-                          color: Color(0xFFFF6B35), size: 16),
-                    ],
+                        SizedBox(height: isSmall ? 3 : 4),
+                        Text(
+                          _currentEsma.fazilet,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _p.onBg(0.4),
+                            fontSize: isSmall ? 10 : 12,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          // Hedef seçici: Ebced / Özel
-          _buildTargetSelector(),
-          const SizedBox(height: 24),
-          // Zikir Button
-          _buildZikirButton(progress),
-          const SizedBox(height: 20),
-          // Ebced info
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildInfoChip('Ebced', '${_currentEsma.ebced}'),
-              const SizedBox(width: 12),
-              _buildInfoChip('Kalan', '$_remaining'),
-              const SizedBox(width: 12),
-              _buildInfoChip('Çekilen', '$_completed'),
-            ],
+          _buildNavButton(
+            icon: Icons.arrow_forward_ios_rounded,
+            semanticLabel: 'Sonraki isim',
+            onTap: () => _changeEsma(1),
           ),
-          const SizedBox(height: 30),
         ],
       ),
     );
   }
 
-  Widget _buildInfoChip(String label, String value) {
+  Widget _buildNavButton({
+    required IconData icon,
+    required String semanticLabel,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              _p.onBg(0.14),
+              _p.onBg(0.03),
+            ],
+          ),
+          border: Border.all(
+            color: _accent.withValues(alpha: 0.45),
+            width: 1.2,
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () {
+              if (_vibrationEnabled) {
+                VibrationService.vibrateLight();
+              }
+              onTap();
+            },
+            customBorder: const CircleBorder(),
+            splashColor: _accent.withValues(alpha: 0.25),
+            highlightColor: _accent.withValues(alpha: 0.12),
+            child: SizedBox(
+              width: 46,
+              height: 46,
+              child: Icon(icon, color: _accent, size: 20),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTargetRow(bool isSmall) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _buildTargetChip('Ebced', _currentEsma.ebced, _useEbced, isSmall),
+        const SizedBox(width: 8),
+        _buildTargetChip('Özel', _customCount, !_useEbced, isSmall),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: _confirmReset,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+                horizontal: isSmall ? 10 : 14, vertical: isSmall ? 6 : 8),
+            decoration: BoxDecoration(
+              color: _p.onBg(0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _accent.withValues(alpha: 0.2),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.refresh_rounded,
+                    color: _p.onBg(0.5), size: isSmall ? 13 : 14),
+                const SizedBox(width: 4),
+                Text(
+                  'Sıfırla',
+                  style: TextStyle(
+                    color: _p.onBg(0.6),
+                    fontSize: isSmall ? 11 : 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmReset() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _p.dialogBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: _accent, width: 2),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.refresh_rounded, color: _accent, size: 24),
+            const SizedBox(width: 8),
+            Text(
+              'Sıfırla',
+              style: TextStyle(
+                  color: _p.textPrimary, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          '${_currentEsma.latin} zikri baştan başlatılacak. Emin misiniz?',
+          style: TextStyle(color: _p.onBg(0.7)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('İptal', style: TextStyle(color: _p.onBg(0.5))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sıfırla', style: TextStyle(color: _accent)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _resetCurrentZikir();
+    }
+  }
+
+  Widget _buildTargetChip(
+      String label, int value, bool selected, bool isSmall) {
+    return GestureDetector(
+      onTap: () {
+        final wantEbced = label == 'Ebced';
+        _switchTargetMode(wantEbced);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(
+            horizontal: isSmall ? 10 : 14, vertical: isSmall ? 6 : 8),
+        decoration: BoxDecoration(
+          gradient: selected
+              ? const LinearGradient(
+                  colors: [_accent, _accentLight],
+                )
+              : null,
+          color: selected ? null : _p.onBg(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? _accent : _p.onBg(0.12),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          '$label · $value',
+          style: TextStyle(
+            color: selected ? Colors.white : _p.onBg(0.6),
+            fontSize: isSmall ? 11 : 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildZikirButton(double progress, double buttonSize,
+      double innerSize, double remainingFontSize, bool isSmall) {
+    return AnimatedBuilder(
+      animation: _pulseAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _pulseAnimation.value,
+          child: GestureDetector(
+            onTapDown: _onTapDown,
+            child: SizedBox(
+              width: buttonSize,
+              height: buttonSize,
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  CircularProgressWidget(
+                    progress: progress,
+                    size: buttonSize,
+                    strokeWidth: buttonSize * 0.073,
+                    trackColor: _p.progressTrack,
+                    child: Container(
+                      width: innerSize,
+                      height: innerSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          center: const Alignment(-0.25, -0.3),
+                          radius: 0.95,
+                          colors: _p.buttonGradient,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _p.buttonGlow.withValues(alpha: 0.45),
+                            blurRadius: 44,
+                            spreadRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: innerSize * 0.8,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                '$_remaining',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: remainingFontSize,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'kalan',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: isSmall ? 12 : 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  ..._ripples.map((r) => Positioned(
+                        left: r.position.dx - (buttonSize * 0.34),
+                        top: r.position.dy - (buttonSize * 0.34),
+                        child: TapGlowEffect(
+                          key: ValueKey('glow_${r.id}'),
+                          onComplete: () => _removeRipple(r.id),
+                          maxRadius: buttonSize * 0.34,
+                        ),
+                      )),
+                  ..._milestones.map((m) => MilestoneFloat(
+                        key: ValueKey('milestone_${m.id}'),
+                        value: m.value,
+                        onComplete: () => _removeMilestone(m.id),
+                      )),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomChips(bool isSmall) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isSmall ? 16 : 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildInfoChip('Ebced', '${_currentEsma.ebced}', isSmall),
+          const SizedBox(width: 8),
+          _buildInfoChip('Kalan', '$_remaining', isSmall),
+          const SizedBox(width: 8),
+          _buildInfoChip('Çekilen', '$_completed', isSmall),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(String label, String value, bool isSmall) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: EdgeInsets.symmetric(
+          horizontal: isSmall ? 10 : 14, vertical: isSmall ? 6 : 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(20),
+        color: _p.onBg(0.05),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFFF6B35).withValues(alpha: 0.3),
+          color: _accent.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -644,16 +907,16 @@ class _ZikirScreenState extends State<ZikirScreen>
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
-              fontSize: 12,
+              color: _p.onBg(0.5),
+              fontSize: isSmall ? 10 : 12,
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
           Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFFFF6B35),
-              fontSize: 14,
+            style: TextStyle(
+              color: _accent,
+              fontSize: isSmall ? 12 : 14,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -662,70 +925,10 @@ class _ZikirScreenState extends State<ZikirScreen>
     );
   }
 
-  Widget _buildTargetSelector() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildTargetChip('Ebced', _currentEsma.ebced, _useEbced),
-        const SizedBox(width: 10),
-        _buildTargetChip('Özel', _customCount, !_useEbced),
-      ],
-    );
-  }
-
-  Widget _buildTargetChip(String label, int value, bool selected) {
-    return GestureDetector(
-      onTap: () {
-        final wantEbced = label == 'Ebced';
-        if (wantEbced == _useEbced) return;
-        setState(() {
-          _useEbced = wantEbced;
-          _remaining = _totalCount;
-          _ripples.clear();
-          _milestones.clear();
-        });
-        StorageService.updateZikirCount(
-          _currentIndex,
-          _currentEsma.latin,
-          _totalCount,
-          0,
-        );
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-        decoration: BoxDecoration(
-          gradient: selected
-              ? const LinearGradient(
-                  colors: [Color(0xFFFF6B35), Color(0xFFFF8E53)],
-                )
-              : null,
-          color: selected ? null : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected
-                ? const Color(0xFFFF6B35)
-                : Colors.white.withValues(alpha: 0.12),
-            width: 1,
-          ),
-        ),
-        child: Text(
-          '$label · $value',
-          style: TextStyle(
-            color:
-                selected ? Colors.white : Colors.white.withValues(alpha: 0.6),
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
   void _showDetailSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF16213E),
+      backgroundColor: _p.dialogBg,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -747,7 +950,7 @@ class _ZikirScreenState extends State<ZikirScreen>
                     width: 44,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: _p.onBg(0.2),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -756,8 +959,8 @@ class _ZikirScreenState extends State<ZikirScreen>
                     _currentEsma.arapca,
                     textDirection: TextDirection.rtl,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: _p.textPrimary,
                       fontSize: 40,
                       fontWeight: FontWeight.bold,
                       height: 1.4,
@@ -767,7 +970,7 @@ class _ZikirScreenState extends State<ZikirScreen>
                   Text(
                     _currentEsma.turkce,
                     style: const TextStyle(
-                      color: Color(0xFFFF6B35),
+                      color: _accent,
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
@@ -790,10 +993,10 @@ class _ZikirScreenState extends State<ZikirScreen>
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: _p.onBg(0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: _p.onBg(0.08),
           width: 1,
         ),
       ),
@@ -803,7 +1006,7 @@ class _ZikirScreenState extends State<ZikirScreen>
           Text(
             title,
             style: const TextStyle(
-              color: Color(0xFFFF6B35),
+              color: _accent,
               fontSize: 14,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.5,
@@ -813,100 +1016,13 @@ class _ZikirScreenState extends State<ZikirScreen>
           Text(
             body,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.85),
+              color: _p.onBg(0.85),
               fontSize: 15,
               height: 1.55,
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildZikirButton(double progress) {
-    return AnimatedBuilder(
-      animation: _pulseAnimation,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: _pulseAnimation.value,
-          child: GestureDetector(
-            onTapDown: _onTapDown,
-            child: SizedBox(
-              width: 300,
-              height: 300,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressWidget(
-                    progress: progress,
-                    size: 300,
-                    strokeWidth: 22,
-                    child: Container(
-                      width: 230,
-                      height: 230,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const RadialGradient(
-                          center: Alignment(-0.25, -0.3),
-                          radius: 0.95,
-                          colors: [
-                            Color(0xFF2E7D63),
-                            Color(0xFF1B5E4F),
-                            Color(0xFF0C3A30),
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF2E7D63).withValues(alpha: 0.45),
-                            blurRadius: 44,
-                            spreadRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '$_remaining',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 72,
-                              fontWeight: FontWeight.w900,
-                              height: 1,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'kalan',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.7),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  ..._ripples.map((r) => Positioned(
-                        left: r.position.dx - 95,
-                        top: r.position.dy - 95,
-                        child: RippleEffect(
-                          key: ValueKey('ripple_${r.id}'),
-                          onComplete: () => _removeRipple(r.id),
-                        ),
-                      )),
-                  ..._milestones.map((m) => MilestoneFloat(
-                        key: ValueKey('milestone_${m.id}'),
-                        value: m.value,
-                        onComplete: () => _removeMilestone(m.id),
-                      )),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }

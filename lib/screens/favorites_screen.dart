@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/esma_data.dart';
 import '../services/storage_service.dart';
-import 'zikir_screen.dart';
+import '../theme/app_theme.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -11,6 +11,11 @@ class FavoritesScreen extends StatefulWidget {
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
+  static const Color _accent = Color(0xFFFF6B35);
+  static const Color _danger = Color(0xFFE74C3C);
+
+  AppPalette _p = AppPalette.dark;
+
   List<int> _favoriteIndices = [];
 
   @override
@@ -44,18 +49,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _p = ThemeScope.of(context);
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF0D0D0D),
-              Color(0xFF1A1A2E),
-              Color(0xFF16213E),
-              Color(0xFF0D0D0D),
-            ],
+            colors: _p.bg,
           ),
         ),
         child: SafeArea(
@@ -84,21 +85,21 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: _p.onBg(0.05),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(
                 Icons.arrow_back_ios_rounded,
-                color: Color(0xFFFF6B35),
+                color: _accent,
                 size: 20,
               ),
             ),
           ),
           const SizedBox(width: 16),
-          const Text(
+          Text(
             'Favoriler',
             style: TextStyle(
-              color: Colors.white,
+              color: _p.textPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
@@ -115,25 +116,19 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         children: [
           Icon(
             Icons.favorite_border_rounded,
-            color: Colors.white.withValues(alpha: 0.15),
+            color: _p.onBg(0.15),
             size: 80,
           ),
           const SizedBox(height: 16),
           Text(
             'Henüz favori eklenmemiş',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.4),
-              fontSize: 16,
-            ),
+            style: TextStyle(color: _p.onBg(0.4), fontSize: 16),
           ),
           const SizedBox(height: 8),
           Text(
             'Kalp ikonuna tıklayarak\nfavorilerinize ekleyebilirsiniz',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.25),
-              fontSize: 14,
-            ),
+            style: TextStyle(color: _p.onBg(0.25), fontSize: 14),
           ),
         ],
       ),
@@ -152,42 +147,31 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         final esma = EsmaData.esmalar[esmaIndex];
 
         return GestureDetector(
-          onTap: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ZikirScreen(initialIndex: esmaIndex),
-              ),
-            );
-          },
+          onTap: () => Navigator.pop(context, esmaIndex),
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: _p.onBg(0.05),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFFE74C3C).withValues(alpha: 0.3),
+                color: _danger.withValues(alpha: 0.3),
                 width: 1,
               ),
             ),
             child: Row(
               children: [
-                // Index circle
                 Container(
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFFE74C3C),
-                        Color(0xFFC0392B),
-                      ],
+                      colors: [_danger, Color(0xFFC0392B)],
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFE74C3C).withValues(alpha: 0.3),
+                        color: _danger.withValues(alpha: 0.3),
                         blurRadius: 8,
                       ),
                     ],
@@ -204,15 +188,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   ),
                 ),
                 const SizedBox(width: 16),
-                // Info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         esma.latin,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: _p.textPrimary,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
@@ -223,7 +206,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: _p.onBg(0.5),
                           fontSize: 13,
                         ),
                       ),
@@ -236,12 +219,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE74C3C).withValues(alpha: 0.12),
+                      color: _danger.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
                       Icons.close_rounded,
-                      color: Color(0xFFE74C3C),
+                      color: _danger,
                       size: 20,
                     ),
                   ),

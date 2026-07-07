@@ -7,6 +7,7 @@ class StorageService {
   static const String _favoritesKey = 'favorites';
   static const String _vibrationKey = 'vibration_enabled';
   static const String _customCountKey = 'custom_count';
+  static const String _darkModeKey = 'dark_mode';
 
   static Future<SharedPreferences> get _prefs async =>
       await SharedPreferences.getInstance();
@@ -105,6 +106,12 @@ class StorageService {
     return favorites.contains(esmaIndex);
   }
 
+  static Future<void> removeHistoryEntry(int esmaIndex) async {
+    final history = await getHistory();
+    history.removeWhere((h) => h.esmaIndex == esmaIndex);
+    await saveHistory(history);
+  }
+
   static Future<bool> getVibrationEnabled() async {
     final prefs = await _prefs;
     return prefs.getBool(_vibrationKey) ?? true;
@@ -113,6 +120,16 @@ class StorageService {
   static Future<void> setVibrationEnabled(bool enabled) async {
     final prefs = await _prefs;
     await prefs.setBool(_vibrationKey, enabled);
+  }
+
+  static Future<bool> getDarkMode() async {
+    final prefs = await _prefs;
+    return prefs.getBool(_darkModeKey) ?? true;
+  }
+
+  static Future<void> setDarkMode(bool enabled) async {
+    final prefs = await _prefs;
+    await prefs.setBool(_darkModeKey, enabled);
   }
 
   static Future<int> getCustomCount() async {
