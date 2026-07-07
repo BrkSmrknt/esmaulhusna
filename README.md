@@ -22,7 +22,17 @@ Her isim; Arapça yazılışı, okunuşu, Türkçe anlamı, fazileti ve ebced de
 
 ## 📱 Ekran Görüntüleri
 
-> Ekran görüntülerini buraya ekleyebilirsiniz (`screenshots/` klasörü).
+| Ana Ekran (Karanlık) | Ana Ekran (Aydınlık) | Ayarlar (Tema) |
+|:---:|:---:|:---:|
+| <img src="screenshots/01_ana_karanlik.png" width="240"/> | <img src="screenshots/02_ana_aydinlik.png" width="240"/> | <img src="screenshots/06_ayarlar.png" width="240"/> |
+
+| 99 İsim | İsim Detayı | Zikir Geçmişi |
+|:---:|:---:|:---:|
+| <img src="screenshots/03_isimler.png" width="240"/> | <img src="screenshots/04_detay.png" width="240"/> | <img src="screenshots/05_gecmis.png" width="240"/> |
+
+| Favoriler |
+|:---:|
+| <img src="screenshots/07_favoriler.png" width="240"/> |
 
 ## 🛠️ Teknolojiler
 
