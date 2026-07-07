@@ -9,13 +9,16 @@ Her isim; Arapça yazılışı, okunuşu, Türkçe anlamı, fazileti ve ebced de
 - **99 isim** — Arapça, Latin okunuş, Türkçe okunuş, anlam ve fazilet bilgileriyle
 - **Zikirmatik sayaç** — ekrana dokunarak zikir çekme, kalan sayı büyük ve net gösterim
 - **İki hedef modu** — her ismin **ebced** değeri ya da kendi belirlediğin **özel** sayı (33, 99, 100…)
-- **Işık dalgası (ripple)** animasyonu — her dokunuşta dokunulan noktadan yayılan zarif halkalar
+- **Aydınlık & Karanlık tema** — ayarlardan tek dokunuşla geçiş; koyu lacivert tema ya da renkli açık tema (krem → şeftali → leylak → mavi geçişli). Tercih kalıcı olarak saklanır.
+- **Işık patlaması dokunuş efekti** — her dokunuşta dokunulan noktada beliren, dışa saçılan sıcak ışık parıltısı
 - **Kilometre taşı** animasyonu — her %10 ilerlemede kalan sayı parlayarak yukarı süzülür
+- **Profesyonel isim geçiş okları** — cam efektli sağ/sol butonlar; isim değişirken yöne duyarlı kayma animasyonu
+- **Onaylı sıfırlama** — yanlış dokunuşları önlemek için "Emin misiniz?" diyaloğu
 - **Titreşim geri bildirimi** (açılıp kapatılabilir)
 - **Kısayollar / favoriler** — sık kullandığın isimleri kaydet, tek dokunuşla geç, kolayca kaldır
 - **Zikir geçmişi** — ilerleme durumu ve her ismin **kaç kez tamamlandığı**
+- **Tüm ekran boyutlarına uyum** — telefon, tablet ve masaüstünde orantısal ölçekleme (responsive)
 - **Kolay gezinme** — kenarlardaki geçiş okları ve "3 / 99" konum göstergesi
-- Koyu, lacivert gradyan tema
 
 ## 📱 Ekran Görüntüleri
 
@@ -24,9 +27,10 @@ Her isim; Arapça yazılışı, okunuşu, Türkçe anlamı, fazileti ve ebced de
 ## 🛠️ Teknolojiler
 
 - [Flutter](https://flutter.dev/) & Dart
-- [shared_preferences](https://pub.dev/packages/shared_preferences) — yerel veri saklama (favoriler, geçmiş, ayarlar)
-- [vibration](https://pub.dev/packages/vibration) — dokunuş geri bildirimi
-- Özel `CustomPainter` çizimleri (dairesel ilerleme, ışık dalgası animasyonu)
+- [shared_preferences](https://pub.dev/packages/shared_preferences) — yerel veri saklama (favoriler, geçmiş, ayarlar, tema tercihi)
+- `HapticFeedback` (flutter/services) — dokunuş titreşimi
+- Merkezi tema sistemi (`AppPalette` + `ThemeScope`) ile aydınlık/karanlık mod
+- Özel `CustomPainter` çizimleri (dairesel ilerleme, ışık patlaması efekti)
 
 ## 🚀 Kurulum
 
@@ -51,12 +55,13 @@ flutter build apk --release
 
 ```
 lib/
-├── main.dart                  # Uygulama girişi
+├── main.dart                  # Uygulama girişi + tema kurulumu
 ├── data/esma_data.dart        # 99 ismin verisi (Arapça, anlam, fazilet, ebced)
 ├── models/                    # EsmaModel, ZikirHistory
-├── screens/                   # Zikir, geçmiş, favoriler, ayarlar ekranları
+├── screens/                   # Zikir, isim listesi, geçmiş, favoriler, ayarlar
 ├── services/                  # Depolama ve titreşim servisleri
-└── widgets/                   # Dairesel ilerleme, ripple, kilometre taşı
+├── theme/app_theme.dart       # Renk paleti + aydınlık/karanlık tema kontrolü
+└── widgets/                   # Dairesel ilerleme, ışık patlaması, kilometre taşı
 ```
 
 ## 📝 Not (Ebced değerleri hakkında)
