@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/zikir_screen.dart';
 import 'services/vibration_service.dart';
+import 'services/widget_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await VibrationService.init();
+  await WidgetService.init();
   await appTheme.load();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,

@@ -5,6 +5,7 @@ import '../data/esma_data.dart';
 import '../models/esma_model.dart';
 import '../services/storage_service.dart';
 import '../services/vibration_service.dart';
+import '../services/widget_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/circular_progress.dart';
 import '../widgets/tap_glow_effect.dart';
@@ -24,7 +25,7 @@ class ZikirScreen extends StatefulWidget {
 }
 
 class _ZikirScreenState extends State<ZikirScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const Color _accent = Color(0xFFFF6B35);
   static const Color _accentLight = Color(0xFFFF8E53);
 
@@ -72,13 +73,33 @@ class _ZikirScreenState extends State<ZikirScreen>
     ));
 
     VibrationService.init();
+    WidgetsBinding.instance.addObserver(this);
     _refreshState();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulseController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Kullanıcı widget'tan zikir çekmiş olabilir; uygulama öne gelince
+    // durumu depodan yeniden yükleyerek senkron kal.
+    if (state == AppLifecycleState.resumed) {
+      _refreshState();
+    }
+  }
+
+  /// Mevcut zikir durumunu ana ekran widget'ına yansıtır.
+  void _syncWidget() {
+    WidgetService.update(
+      index: _currentIndex,
+      target: _totalCount,
+      completed: _completed,
+    );
   }
 
   /// Ayarları ve mevcut isim için kayıtlı ilerlemeyi yükler. Kayıtlı hedef
@@ -122,6 +143,7 @@ class _ZikirScreenState extends State<ZikirScreen>
               ? savedRemaining
               : total;
     });
+    _syncWidget();
   }
 
   EsmaModel get _currentEsma => EsmaData.esmalar[_currentIndex];
@@ -168,6 +190,7 @@ class _ZikirScreenState extends State<ZikirScreen>
         _completed,
       );
     }
+    _syncWidget();
   }
 
   void _showCompletionDialog() {
@@ -320,6 +343,7 @@ class _ZikirScreenState extends State<ZikirScreen>
       _totalCount,
       0,
     );
+    _syncWidget();
   }
 
   void _switchTargetMode(bool ebced) {
@@ -339,6 +363,7 @@ class _ZikirScreenState extends State<ZikirScreen>
       _totalCount,
       _completed,
     );
+    _syncWidget();
   }
 
   @override

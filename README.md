@@ -16,6 +16,7 @@ Her isim; Arapça yazılışı, okunuşu, Türkçe anlamı, fazileti ve ebced de
 - **Onaylı sıfırlama** — yanlış dokunuşları önlemek için "Emin misiniz?" diyaloğu
 - **Titreşim geri bildirimi** (açılıp kapatılabilir)
 - **Kısayollar / favoriler** — sık kullandığın isimleri kaydet, tek dokunuşla geç, kolayca kaldır
+- **Ana ekran widget'ı (Android)** — son kalınan zikri ana ekranda gösterir; **"+ Çek"** ile uygulamayı açmadan doğrudan ana ekrandan zikir çekilir, sayaç ve ilerleme uygulamayla senkron kalır
 - **Zikir geçmişi** — ilerleme durumu ve her ismin **kaç kez tamamlandığı**
 - **Tüm ekran boyutlarına uyum** — telefon, tablet ve masaüstünde orantısal ölçekleme (responsive)
 - **Kolay gezinme** — kenarlardaki geçiş okları ve "3 / 99" konum göstergesi
