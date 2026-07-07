@@ -366,8 +366,8 @@ class _ZikirScreenState extends State<ZikirScreen>
               // genişlikte kalır; telefonlarda tüm genişlik kullanılır.
               final contentWidth = math.min(w, 520.0);
               final buttonSize = math
-                  .min(contentWidth * 0.62, h * 0.34)
-                  .clamp(160.0, 330.0)
+                  .min(contentWidth * 0.72, h * 0.38)
+                  .clamp(180.0, 360.0)
                   .toDouble();
               final innerSize = buttonSize * 0.77;
               final arabicFont = (h * 0.054).clamp(30.0, 56.0).toDouble();
@@ -385,7 +385,9 @@ class _ZikirScreenState extends State<ZikirScreen>
                       _buildNameSection(arabicFont, latinFont, isSmall),
                       const Spacer(flex: 2),
                       _buildTargetRow(isSmall),
-                      SizedBox(height: h * 0.022),
+                      // Buton, üstteki hedef satırı ile alttaki bilgi çipleri
+                      // arasında dikeyde tam ortalanır (eşit esnek boşluklar).
+                      const Spacer(flex: 3),
                       _buildZikirButton(
                           progress, buttonSize, innerSize, remainFont, isSmall),
                       const Spacer(flex: 3),
