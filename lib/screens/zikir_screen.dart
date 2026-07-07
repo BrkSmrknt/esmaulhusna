@@ -492,120 +492,142 @@ class _ZikirScreenState extends State<ZikirScreen>
     );
   }
 
+  /// İsim değişince yöne duyarlı kayma + solma geçişi uygular.
+  Widget _slideSwitcher({required Widget child}) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final slide = Tween<Offset>(
+          begin: Offset(0.12 * _navDirection, 0),
+          end: Offset.zero,
+        ).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: slide, child: child),
+        );
+      },
+      layoutBuilder: (currentChild, previousChildren) => Stack(
+        alignment: Alignment.center,
+        children: [
+          ...previousChildren,
+          ?currentChild,
+        ],
+      ),
+      child: child,
+    );
+  }
+
   Widget _buildNameSection(double arabicFont, double latinFont, bool isSmall) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isSmall ? 10 : 16),
-      child: Row(
+      child: Column(
         children: [
-          _buildNavButton(
-            icon: Icons.arrow_back_ios_new_rounded,
-            semanticLabel: 'Önceki isim',
-            onTap: () => _changeEsma(-1),
-          ),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 280),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) {
-                final slide = Tween<Offset>(
-                  begin: Offset(0.12 * _navDirection, 0),
-                  end: Offset.zero,
-                ).animate(animation);
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(position: slide, child: child),
-                );
-              },
-              layoutBuilder: (currentChild, previousChildren) => Stack(
-                alignment: Alignment.center,
-                children: [
-                  ...previousChildren,
-                  ?currentChild,
-                ],
+          // İsmin çekirdeği (Arapça + Latin + Türkçe) ve iki yanına bitişik
+          // gezinme okları. Flexible sayesinde oklar isme yaslanır, kenarlara
+          // itilmez.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildNavButton(
+                icon: Icons.arrow_back_ios_new_rounded,
+                semanticLabel: 'Önceki isim',
+                onTap: () => _changeEsma(-1),
               ),
+              SizedBox(width: isSmall ? 8 : 14),
+              Flexible(
+                child: _slideSwitcher(
+                  child: Column(
+                    key: ValueKey('core_$_currentIndex'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _currentEsma.arapca,
+                        textDirection: TextDirection.rtl,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _p.textPrimary,
+                          fontSize: arabicFont,
+                          fontWeight: FontWeight.bold,
+                          height: 1.2,
+                          shadows: [
+                            Shadow(
+                              color: _accent.withValues(alpha: 0.35),
+                              blurRadius: 24,
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: isSmall ? 2 : 4),
+                      Text(
+                        _currentEsma.latin,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _accent,
+                          fontSize: latinFont,
+                          fontWeight: FontWeight.bold,
+                          fontStyle: FontStyle.italic,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      SizedBox(height: isSmall ? 1 : 2),
+                      Text(
+                        _currentEsma.turkce,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _p.onBg(0.6),
+                          fontSize: isSmall ? 12 : 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: isSmall ? 8 : 14),
+              _buildNavButton(
+                icon: Icons.arrow_forward_ios_rounded,
+                semanticLabel: 'Sonraki isim',
+                onTap: () => _changeEsma(1),
+              ),
+            ],
+          ),
+          SizedBox(height: isSmall ? 4 : 6),
+          // Anlam ve fazilet: tam genişlik, dokununca detay sayfası açılır.
+          GestureDetector(
+            onTap: _showDetailSheet,
+            behavior: HitTestBehavior.opaque,
+            child: _slideSwitcher(
               child: Column(
-                key: ValueKey(_currentIndex),
+                key: ValueKey('desc_$_currentIndex'),
                 children: [
                   Text(
-                    _currentEsma.arapca,
-                    textDirection: TextDirection.rtl,
+                    _currentEsma.anlami,
                     textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: _p.textPrimary,
-                      fontSize: arabicFont,
-                      fontWeight: FontWeight.bold,
-                      height: 1.2,
-                      shadows: [
-                        Shadow(
-                          color: _accent.withValues(alpha: 0.35),
-                          blurRadius: 24,
-                        ),
-                      ],
+                      color: _p.onBg(0.65),
+                      fontSize: isSmall ? 11 : 13,
+                      height: 1.4,
                     ),
                   ),
-                  SizedBox(height: isSmall ? 2 : 4),
+                  SizedBox(height: isSmall ? 3 : 4),
                   Text(
-                    _currentEsma.latin,
+                    _currentEsma.fazilet,
                     textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: _accent,
-                      fontSize: latinFont,
-                      fontWeight: FontWeight.bold,
-                      fontStyle: FontStyle.italic,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  SizedBox(height: isSmall ? 1 : 2),
-                  Text(
-                    _currentEsma.turkce,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: _p.onBg(0.6),
-                      fontSize: isSmall ? 12 : 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  SizedBox(height: isSmall ? 4 : 6),
-                  GestureDetector(
-                    onTap: _showDetailSheet,
-                    behavior: HitTestBehavior.opaque,
-                    child: Column(
-                      children: [
-                        Text(
-                          _currentEsma.anlami,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: _p.onBg(0.65),
-                            fontSize: isSmall ? 11 : 13,
-                            height: 1.4,
-                          ),
-                        ),
-                        SizedBox(height: isSmall ? 3 : 4),
-                        Text(
-                          _currentEsma.fazilet,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: _p.onBg(0.4),
-                            fontSize: isSmall ? 10 : 12,
-                            height: 1.3,
-                          ),
-                        ),
-                      ],
+                      color: _p.onBg(0.4),
+                      fontSize: isSmall ? 10 : 12,
+                      height: 1.3,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          _buildNavButton(
-            icon: Icons.arrow_forward_ios_rounded,
-            semanticLabel: 'Sonraki isim',
-            onTap: () => _changeEsma(1),
           ),
         ],
       ),
